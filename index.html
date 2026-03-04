@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHANDY RANGE - COMMAND DASHBOARD</title>
+    <style>
+        /* === TOWER DASHBOARD THEME === */
+        :root {
+            --bg-color: #0b131e; --panel-bg: #152233; --text-main: #e2e8f0;
+            --data-color: #00ffcc; --wind-color: #39ff14; --warning-color: #ff3333;
+            --border-color: #2a3f5f; --accent-gold: #f39c12;
+            --vmc-color: #00cc66; --imc-color: #ff3333; --cloud-cb: #ff5555;
+        }
+
+        body, html { margin: 0; padding: 0; width: 100%; height: 100vh; background-color: var(--bg-color); color: var(--text-main); font-family: 'Consolas', 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; }
+        #update-bar-container { width: 100%; height: 4px; background-color: #1a2a40; position: absolute; top: 0; left: 0; z-index: 1000; }
+        #update-bar { height: 100%; width: 100%; background-color: var(--data-color); transition: width 1s linear; box-shadow: 0 0 10px var(--data-color); }
+
+        /* --- HEADER --- */
+        .header-bar { background-color: #0a0f18; border-bottom: 3px solid var(--accent-gold); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
+        .header-left-container { display: flex; align-items: center; gap: 15px; }
+        .main-logo { height: 60px; width: auto; filter: drop-shadow(0 0 5px rgba(243, 156, 18, 0.3)); }
+        .header-titles-block { display: flex; flex-direction: column; }
+        .station-title { font-size: 1.8vw; font-weight: bold; color: #ffffff; letter-spacing: 1px; display: flex; align-items: center; }
+        .identity-row { display: flex; align-items: center; margin-top: 5px; }
+        .range-identity { font-size: 1.1vw; color: var(--accent-gold); font-weight: bold; letter-spacing: 2px; text-shadow: 0 0 8px rgba(243, 156, 18, 0.5); }
+        .chdy-icon { height: 25px; width: auto; margin-left: 10px; filter: drop-shadow(0 0 5px var(--accent-gold)); }
+
+        .station-dropdown, .radar-dropdown { background-color: #1a2a40; color: var(--data-color); border: 2px solid var(--data-color); border-radius: 5px; font-family: 'Consolas', monospace; font-weight: bold; padding: 2px 5px; cursor: pointer; outline: none; margin-left: 10px; font-size: 1.5vw; }
+        .station-dropdown:hover, .radar-dropdown:hover { background-color: #233a57; }
+        optgroup, option { background-color: #0b131e; color: #fff; }
+
+        .header-right-container { display: flex; align-items: center; gap: 15px; }
+        
+        .action-btn { background-color: rgba(0, 255, 204, 0.1); border: 2px solid var(--data-color); color: var(--data-color); padding: 8px 15px; border-radius: 5px; font-family: 'Consolas', monospace; font-size: 1.4vw; font-weight: bold; cursor: pointer; box-shadow: 0 0 8px rgba(0, 255, 204, 0.3); transition: all 0.2s; }
+        .action-btn:hover { background-color: var(--data-color); color: #000; }
+        .action-btn:active { transform: scale(0.95); }
+
+        .flight-rule-badge { padding: 8px 15px; border-radius: 5px; font-size: 1.8vw; font-weight: bold; color: white; text-shadow: 1px 1px 2px #000; letter-spacing: 2px; border: 2px solid rgba(255,255,255,0.5); transition: all 0.3s; }
+        
+        @keyframes flash-imc { 0% { background-color: var(--imc-color); box-shadow: 0 0 20px var(--imc-color); } 50% { background-color: #8b0000; box-shadow: 0 0 5px #8b0000; } 100% { background-color: var(--imc-color); box-shadow: 0 0 20px var(--imc-color); } }
+        .imc-flashing { animation: flash-imc 1s infinite; border-color: #fff; }
+        .vmc-steady { background-color: var(--vmc-color); box-shadow: 0 0 10px var(--vmc-color); }
+        .na-steady { background-color: #555; box-shadow: none; border-color: #777; }
+        
+        .clock-box { display: flex; flex-direction: column; align-items: center; font-size: 1.6vw; color: var(--data-color); font-weight: bold; background: #111; padding: 8px 15px; border-radius: 5px; border: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s; }
+        .clock-box:hover { background: #1a2a40; box-shadow: 0 0 15px rgba(0,255,204,0.3); transform: scale(1.05); }
+
+        .raw-metar-box { padding: 8px 20px; font-size: 1.4vw; color: #f1c40f; background-color: #111; border-bottom: 2px solid var(--border-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* --- DASHBOARD --- */
+        .dashboard-container { display: flex; flex: 1; padding: 15px; gap: 15px; box-sizing: border-box; height: calc(100vh - 130px); }
+        .panel { background-color: var(--panel-bg); border: 2px solid var(--border-color); border-radius: 10px; padding: 15px; display: flex; flex-direction: column; position: relative; }
+        .panel-title { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); font-size: 1.6vw; font-weight: bold; color: #a0aec0; z-index: 10; background: var(--panel-bg); padding: 0 10px;}
+
+        /* --- COL 1: CONDITIONS --- */
+        .conditions-panel { flex: 0.8; justify-content: space-around; padding-top: 40px; }
+        .data-row { display: flex; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px; }
+        .data-label { width: 80px; font-size: 1.8vw; font-weight: bold; color: #a0aec0; }
+        
+        .data-value-container { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; flex: 1; margin-left: 10px; }
+        .data-value { font-size: 2.2vw; font-weight: bold; color: var(--data-color); text-shadow: 0 0 8px rgba(0, 255, 204, 0.4); white-space: nowrap; }
+        .data-weather-desc { font-size: 1.3vw; color: #ffb703; font-weight: normal; margin-top: -2px; }
+
+        /* --- COL 2: WIND INDICATOR --- */
+        .wind-panel { flex: 1.1; align-items: center; justify-content: flex-start; padding-top: 50px; }
+        .compass-circle { width: 38vh; height: 38vh; border: 6px solid #4a5568; border-radius: 50%; position: relative; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, #1a2a40 0%, #0d1623 100%); box-shadow: inset 0 0 40px rgba(0,0,0,0.9), 0 0 25px rgba(0,0,0,0.6); margin-top: 10px; }
+        .dir-mark { position: absolute; font-size: 1.8vw; font-weight: bold; color: #5a6b82; }
+        .mark-n { top: 5px; color: #8898aa; } .mark-s { bottom: 5px; } .mark-e { right: 8px; } .mark-w { left: 8px; }
+        .wind-center { z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
+        .wind-dir-text { font-size: 2.2vw; font-weight: bold; color: var(--text-main); margin-bottom: -5px; margin-top: 15px; }
+        .wind-speed-val { font-size: 6vw; font-weight: bold; color: var(--wind-color); text-shadow: 0 0 15px rgba(57, 255, 20, 0.6); line-height: 1; }
+        .wind-unit { font-size: 1.2vw; color: #a0aec0; margin-top: -5px; }
+        .wind-needle-container { position: absolute; width: 100%; height: 100%; border-radius: 50%; transition: transform 1.5s cubic-bezier(0.4, 0.0, 0.2, 1); z-index: 5; }
+        .wind-needle { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 1.5vh solid transparent; border-right: 1.5vh solid transparent; border-top: 4vh solid var(--wind-color); filter: drop-shadow(0 0 8px var(--wind-color)); }
+        
+        .gust-alert { margin-top: 20px; font-size: 2.2vw; font-weight: bold; animation: blink 1s infinite; height: 2.5vw; }
+        .caution-box { margin-top: auto; margin-bottom: 20px; width: 90%; padding: 10px; background-color: #2b0a0a; border: 3px solid var(--warning-color); border-radius: 8px; color: var(--warning-color); font-size: 1.6vw; font-weight: bold; text-align: center; animation: pulse-border 2s infinite; text-shadow: 0 0 8px rgba(255,51,51,0.6); }
+
+        /* --- COL 3: RADAR --- */
+        .radar-panel { flex: 1.3; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+        .radar-header { background: rgba(10, 15, 24, 0.8); padding: 10px; display: flex; justify-content: space-between; align-items: center; z-index: 20; border-bottom: 1px solid var(--border-color); }
+        .radar-title-text { font-size: 1.5vw; font-weight: bold; color: #a0aec0; }
+        .radar-dropdown { font-size: 1.2vw; max-width: 60%; }
+        
+        .radar-viewport { flex: 1; position: relative; overflow: hidden; background-color: #000; cursor: grab; }
+        .radar-viewport:active { cursor: grabbing; }
+        .radar-draggable-area { position: absolute; width: 200%; height: 200%; transition: none; }
+        .radar-iframe { width: 100%; height: 100%; border: none; background-color: transparent; pointer-events: none; }
+
+        /* --- MODAL (FULLSCREEN RADAR & TIMER) --- */
+        .fullscreen-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.95); z-index: 3000; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+        .close-modal-btn { position: absolute; top: 20px; right: 30px; font-size: 3vw; color: #fff; cursor: pointer; z-index: 3010; font-family: sans-serif; }
+        .close-modal-btn:hover { color: var(--warning-color); }
+
+        .fs-radar-container { width: 90%; height: 90%; border: 3px solid var(--border-color); border-radius: 10px; position: relative; overflow: hidden; }
+        
+        .tot-timer-container { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; cursor: crosshair; }
+        .tot-big-clock { font-size: 12vw; font-weight: bold; color: var(--data-color); text-shadow: 0 0 30px rgba(0,255,204,0.6); margin-bottom: 30px; font-family: 'Consolas', monospace; pointer-events: none; }
+        .tot-list { display: flex; flex-direction: column; gap: 15px; width: 60%; pointer-events: none; }
+        .tot-record { display: flex; justify-content: space-between; background: #152233; padding: 15px 30px; border-left: 5px solid var(--warning-color); font-size: 2.5vw; color: #fff; font-weight: bold; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        .tot-clear-btn { margin-top: 30px; padding: 10px 20px; font-size: 1.5vw; background: #ff3333; color: white; border: none; border-radius: 5px; cursor: pointer; position: relative; z-index: 3020; }
+
+        .hide { display: none !important; }
+        .overlay-msg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(11, 19, 30, 0.95); display: flex; align-items: center; justify-content: center; text-align: center; font-size: 2.5vw; color: var(--data-color); z-index: 100; padding: 20px; box-sizing: border-box; }
+        
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes pulse-border { 0% { box-shadow: 0 0 10px rgba(255,51,51,0.2); } 50% { box-shadow: 0 0 25px rgba(255,51,51,0.8); } 100% { box-shadow: 0 0 10px rgba(255,51,51,0.2); } }
+
+        /* ========================================================
+           RESPONSIVE DESIGN สำหรับมือถือและแท็บเล็ต
+           ======================================================== */
+        @media (max-width: 1024px) {
+            body, html { height: auto; overflow-y: auto; overflow-x: hidden; }
+            .dashboard-container { flex-direction: column; height: auto; padding: 10px; }
+            .panel { min-height: 350px; margin-bottom: 10px; }
+            .header-bar { flex-direction: column; align-items: flex-start; gap: 15px; }
+            .header-right-container { width: 100%; justify-content: space-between; }
+            
+            .station-title { font-size: 4vw; }
+            .station-dropdown { font-size: 3.5vw; }
+            .range-identity { font-size: 2.5vw; }
+            .action-btn { font-size: 3.5vw; }
+            .flight-rule-badge { font-size: 4vw; }
+            .clock-box { font-size: 3.5vw; }
+            .raw-metar-box { font-size: 3vw; white-space: normal; word-break: break-all; }
+            
+            .data-label { font-size: 4vw; width: 100px; }
+            .data-value { font-size: 5vw; }
+            .data-weather-desc { font-size: 3.5vw; }
+            .panel-title { font-size: 3.5vw; }
+            
+            .compass-circle { width: 60vw; height: 60vw; max-width: 350px; max-height: 350px; margin-top: 30px; }
+            .wind-dir-text { font-size: 6vw; }
+            .wind-speed-val { font-size: 15vw; }
+            .wind-unit { font-size: 4vw; }
+            .dir-mark { font-size: 4vw; }
+            .gust-alert { font-size: 5vw; height: 6vw; }
+            .caution-box { font-size: 4vw; }
+            
+            .radar-panel { height: 60vh; }
+            .radar-title-text { font-size: 3.5vw; }
+            .radar-dropdown { font-size: 3vw; max-width: 100%; }
+            
+            .tot-big-clock { font-size: 18vw; }
+            .tot-record { font-size: 5vw; padding: 10px; }
+            .tot-clear-btn { font-size: 4vw; }
+            .close-modal-btn { font-size: 8vw; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="update-bar-container"><div id="update-bar"></div></div>
+
+    <div class="header-bar">
+        <div class="header-left-container">
+            <img src="logo_main.png" alt="RTAF Logo" class="main-logo" onerror="this.style.display='none'">
+            <div class="header-titles-block">
+                <div class="station-title">
+                    ATC MET DISPLAY : 
+                    <select id="station-select" class="station-dropdown">
+                        <optgroup label="สถานีกองข่าวอากาศ ทอ.">
+                            <option value="VTMD">VTMD (DONMUANG)</option>
+                            <option value="VTNC">VTNC (CHIANGMAI)</option>
+                            <option value="VTNP">VTNP (PHITSANULOK)</option>
+                            <option value="VTED">VTED (UDON)</option>
+                            <option value="VTEU">VTEU (UBON)</option>
+                            <option value="VTEN">VTEN (KORAT)</option>
+                            <option value="VTEZ">VTEZ (NAMPHONG)</option>
+                            <option value="VTMG">VTMG (KAOKIEO)</option>
+                            <option value="VTML">VTML (KOKEKATHIEM)</option>
+                            <option value="VTMM" selected>VTMM (MUANGKOM)</option>
+                            <option value="VTMK">VTMK (KAMPHAENGSAEN)</option>
+                            <option value="VTMW">VTMW (WATTHANA-NAKHON)</option>
+                            <option value="VTMU">VTMU (U-TAPHAO)</option>
+                            <option value="VTMH">VTMH (HUA-HIN)</option>
+                            <option value="VTMP">VTMP (PRACHUAP)</option>
+                            <option value="VTDB">VTDB (SURATTHANI)</option>
+                            <option value="VTDS">VTDS (HAT-YAI)</option>
+                            <option value="VTDT">VTDT (BHO-THONG)</option>
+                            <option value="VTMI">VTMI (TAKHLI)</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="identity-row">
+                    <div class="range-identity">CHANDY RANGE (VTP4)</div>
+                    <img src="logo_chdy.png" alt="CHDY Icon" class="chdy-icon" onerror="this.style.display='none'">
+                </div>
+            </div>
+        </div>
+        
+        <div class="header-right-container">
+            <button class="action-btn" onclick="playATIS()">🔊 PLAY ATIS</button>
+            <div id="flight-rule-badge" class="flight-rule-badge vmc-steady">VMC</div>
+            
+            <div class="clock-box" id="main-clock-box" title="Double Click เพื่อเปิดนาฬิกาจับเวลา">
+                <div style="font-size: 0.9vw; color: #8898aa;" class="mobile-hide">LOCAL TIME</div>
+                <div id="sys-time-local" class="clock-local">--:--:--</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="raw-metar-box" id="raw-metar">AWAITING DATA...</div>
+
+    <div class="dashboard-container">
+        
+        <div class="panel conditions-panel">
+            <div class="panel-title">CONDITIONS</div>
+            
+            <div class="data-row" style="align-items: flex-start;">
+                <div class="data-label" style="margin-top: 5px;">VIS.</div>
+                <div class="data-value-container">
+                    <div class="data-value" id="val-vis">----</div>
+                    <div class="data-weather-desc" id="val-wx"></div>
+                </div>
+                <div class="data-label" style="width: auto; margin-right: 5px; margin-top: 5px;">TIME</div>
+                <div class="data-value" id="val-time" style="color: #ffffff; margin-top: 5px;">----</div>
+            </div>
+            
+            <div class="data-row"><div class="data-label">FEW.</div><div class="data-value" id="val-few">----</div></div>
+            <div class="data-row"><div class="data-label">SCT.</div><div class="data-value" id="val-sct">----</div></div>
+            <div class="data-row"><div class="data-label">BKN.</div><div class="data-value" id="val-bkn">----</div></div>
+            <div class="data-row"><div class="data-label">OVC.</div><div class="data-value" id="val-ovc">----</div></div>
+            <div class="data-row"><div class="data-label">QNH</div><div class="data-value" id="val-qnh" style="color: #ffb703;">----</div></div>
+            <div class="data-row" style="border: none; padding-bottom: 0;"><div class="data-label">TMP/DP</div><div class="data-value" id="val-temp" style="color: #3498db;">----</div></div>
+        </div>
+
+        <div class="panel wind-panel">
+            <div class="panel-title">WIND INDICATOR</div>
+            <div class="compass-circle"><div class="dir-mark mark-n">N</div><div class="dir-mark mark-e">E</div><div class="dir-mark mark-s">S</div><div class="dir-mark mark-w">W</div><div class="wind-center"><div class="wind-dir-text" id="wind-dir-text">---°</div><div class="wind-speed-val" id="wind-spd">--</div><div class="wind-unit">KNOTS</div></div><div class="wind-needle-container" id="wind-needle-box"><div class="wind-needle"></div></div></div>
+            <div id="gust-alert" class="gust-alert"></div>
+            <div id="caution-box" class="caution-box hide">WARNING: NIL</div>
+        </div>
+
+        <div class="panel radar-panel">
+            <div class="radar-header">
+                <div class="radar-title-text">TMD RADAR LOOP</div>
+                <select id="radar-select" class="radar-dropdown">
+                    <option value="https://weather.tmd.go.th/kkw240_HQ_Loop_edit2.php" selected>NAKHON NAYOK (240KM)</option>
+                    <option value="https://weather.tmd.go.th/kkw480_HQ_Loop_edit2.php">NAKHON NAYOK (480KM)</option>
+                    <option value="https://weather.tmd.go.th/chn240_HQ_Loop_edit2.php">CHAINAT (240KM)</option>
+                    <option value="https://weather.tmd.go.th/phb240_HQ_Loop_edit2.php">PHETCHABUN (240KM)</option>
+                    <option value="https://weather.tmd.go.th/tklLoop.php">TAKHLI (240KM)</option>
+                </select>
+            </div>
+            <div class="radar-viewport" id="radar-viewport" title="Double Click เพื่อขยายเรดาร์เต็มจอ">
+                <div class="radar-draggable-area" id="radar-draggable">
+                    <iframe id="radar-iframe" class="radar-iframe" src="https://weather.tmd.go.th/kkw240_HQ_Loop_edit2.php" scrolling="no"></iframe>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="radar-modal" class="fullscreen-modal hide">
+        <div class="close-modal-btn" onclick="closeRadarModal()">✖</div>
+        <div class="fs-radar-container">
+            <iframe id="fs-radar-iframe" style="width: 100%; height: 100%; border: none;" src=""></iframe>
+        </div>
+    </div>
+
+    <div id="timer-modal" class="fullscreen-modal hide">
+        <div class="close-modal-btn" onclick="closeTimerModal()">✖</div>
+        <div class="tot-timer-container" id="tot-timer-container">
+            <div class="tot-big-clock" id="tot-big-clock">--:--:--</div>
+            <div class="tot-list" id="tot-list"></div>
+            <button class="tot-clear-btn" onclick="clearTotList()">🗑️ CLEAR RECORDS</button>
+        </div>
+    </div>
+
+    <div id="overlay" class="overlay-msg">CONNECTING TO MET BASE... ⏳</div>
+
+    <script>
+        window.onerror = function(msg, url, line, col, error) { const overlay = document.getElementById('overlay'); if(overlay) { overlay.classList.remove('hide'); overlay.innerHTML = `<span style="color:red; font-weight:bold;">❌ JAVASCRIPT ERROR<br><br>${msg}</span>`; } return false; };
+        
+        // --- CLOCK & TOT TIMER SYSTEM ---
+        let currentLocalTimeStr = "";
+        function updateClocks() {
+            const now = new Date();
+            const lHrs = now.getHours().toString().padStart(2, '0'); 
+            const lMin = now.getMinutes().toString().padStart(2, '0'); 
+            const lSec = now.getSeconds().toString().padStart(2, '0');
+            
+            currentLocalTimeStr = `${lHrs}:${lMin}:${lSec}`;
+            document.getElementById('sys-time-local').innerText = currentLocalTimeStr;
+            
+            if(!document.getElementById('timer-modal').classList.contains('hide')) {
+                document.getElementById('tot-big-clock').innerText = currentLocalTimeStr;
+            }
+        }
+        setInterval(updateClocks, 1000); updateClocks();
+
+        document.getElementById('main-clock-box').addEventListener('dblclick', () => {
+            document.getElementById('timer-modal').classList.remove('hide');
+        });
+        function closeTimerModal() { document.getElementById('timer-modal').classList.add('hide'); }
+        
+        // --- ระบบบันทึกเวลา (รับทุกการกด/คลิก/แตะ) ---
+        let totCount = 0;
+        let lastTotTime = 0; // เพิ่มตัวแปรเก็บเวลาที่กดล่าสุด (หน่วงเวลา)
+
+        function recordTOT() {
+            if(document.getElementById('timer-modal').classList.contains('hide')) return; 
+
+            // ระบบ Debounce: ป้องกันปัญหาการกด 1 ครั้งนับ 2 (Ghost Click) บนมือถือ และกันการกดเบิ้ล
+            const nowMs = Date.now();
+            if (nowMs - lastTotTime < 300) return; // ถ้ามีการส่งคำสั่งซ้ำเข้ามาภายใน 0.3 วินาที ให้ข้ามไป
+            lastTotTime = nowMs;
+
+            totCount++;
+            const list = document.getElementById('tot-list');
+            const row = document.createElement('div');
+            row.className = 'tot-record';
+            row.innerHTML = `<span>BOMB #${totCount}</span> <span style="color:var(--wind-color);">${currentLocalTimeStr}</span>`;
+            list.insertBefore(row, list.firstChild);
+            if(list.children.length > 5) { list.removeChild(list.lastChild); }
+        }
+
+        function handleTimerInteraction(e) {
+            if(document.getElementById('timer-modal').classList.contains('hide')) return;
+            if(e.target.classList.contains('close-modal-btn') || e.target.classList.contains('tot-clear-btn')) return;
+            
+            // ป้องกันให้มือถือส่งเฉพาะคำสั่ง Touchstart แล้วยกเลิกคำสั่ง Mousedown ที่จะตามมา
+            if (e.type === 'touchstart') {
+                e.preventDefault(); 
+            }
+            recordTOT();
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if(!document.getElementById('timer-modal').classList.contains('hide')) recordTOT();
+        });
+        const timerContainer = document.getElementById('timer-modal');
+        timerContainer.addEventListener('mousedown', handleTimerInteraction);
+        timerContainer.addEventListener('touchstart', handleTimerInteraction, {passive: false}); // ให้สามารถใช้ e.preventDefault() ได้
+        
+        function clearTotList() { document.getElementById('tot-list').innerHTML = ''; totCount = 0; }
+
+        // --- UPDATE PROGRESS BAR ---
+        const updateIntervalMS = 10 * 60 * 1000; 
+        let progressInterval;
+        function resetProgressBar() {
+            const bar = document.getElementById('update-bar');
+            bar.style.transition = 'none'; bar.style.width = '100%'; clearInterval(progressInterval);
+            let timeLeft = updateIntervalMS;
+            progressInterval = setInterval(() => {
+                timeLeft -= 1000; let pct = (timeLeft / updateIntervalMS) * 100;
+                bar.style.transition = 'width 1s linear'; bar.style.width = pct + '%';
+            }, 1000);
+        }
+
+        const apiUrl = 'https://weather.rtaf.mi.th/api/v1/metar/desktop/getMetarAllStationJSON';
+        let cachedDatabaseText = ""; let currentParsedData = null;
+        const wxDictionary = { 'HZ': 'หมอกแดด', 'BR': 'ในหมอก', 'FG': 'หมอกหนา', 'RA': 'มีฝน', '-RA': 'ฝนเบา', '+RA': 'ฝนหนัก', 'TS': 'ฝนฟ้าคะนอง', 'VCSH': 'ฝนระยะไกล', 'VCTS': 'ฝนฟ้าคะนองระยะไกล', 'DZ': 'ฝนละออง', 'SHRA': 'ฝนซู่' };
+        
+        function parseMetar(metar) { 
+            let parsed = { raw: metar, time: '----', vis: '----', visVal: '', wxDesc: '', few: '----', sct: '----', bkn: '----', ovc: '----', qnh: '----', tempDew: '----', windDir: '000', windSpd: '00', gust: null, isVrb: false, flightRule: 'VMC', caution: [] }; 
+            
+            const timeMatch = metar.match(/\b\d{2}(\d{4})Z\b/); 
+            if (timeMatch) { 
+                let utcTime = timeMatch[1]; let hours = parseInt(utcTime.substring(0, 2), 10); let mins = utcTime.substring(2, 4); 
+                let localHours = (hours + 7) % 24; parsed.time = `${localHours.toString().padStart(2, '0')}${mins} L`; 
+            } 
+            
+            const windMatch = metar.match(/\b(VRB|\d{3})(\d{2,3})(?:G(\d{2,3}))?KT\b/); 
+            if (windMatch) { parsed.windDir = windMatch[1]; parsed.windSpd = windMatch[2]; if(windMatch[3]) parsed.gust = windMatch[3]; if(parsed.windDir === 'VRB') parsed.isVrb = true; } 
+            
+            const qnhMatch = metar.match(/\b(A|Q)(\d{4})\b/); if (qnhMatch) parsed.qnh = qnhMatch[2]; 
+            const tempMatch = metar.match(/\b(M?\d{2})\/(M?\d{2})\b/);
+            if (tempMatch) { let t = tempMatch[1].replace('M', '-'); let d = tempMatch[2].replace('M', '-'); parsed.tempDew = `${t}°C / ${d}°C`; }
+
+            let lowestCeiling = 999; 
+            const cloudMatches = metar.match(/\b(FEW|SCT|BKN|OVC)(\d{3})(CB|TCU)?\b/g); 
+            if (cloudMatches) { 
+                parsed.few = ''; parsed.sct = ''; parsed.bkn = ''; parsed.ovc = ''; 
+                cloudMatches.forEach(cloud => { 
+                    const type = cloud.substring(0, 3).toLowerCase(); 
+                    const hStr = cloud.substring(3, 6); 
+                    const height = parseInt(hStr, 10) * 100; 
+                    const extra = cloud.substring(6) || ''; 
+                    
+                    let format = `${height} FT`;
+                    if(extra) {
+                        format = `<span style="color: var(--cloud-cb); text-shadow: 0 0 5px var(--warning-color); font-weight: 900;">${extra}</span> ${height} FT`;
+                    }
+                    
+                    if(parsed[type] === '') parsed[type] = format; else parsed[type] += `, ${format}`; 
+                    if(type === 'bkn' || type === 'ovc') { if(parseInt(hStr, 10) < lowestCeiling) lowestCeiling = parseInt(hStr, 10); }
+                }); 
+                if(!parsed.few) parsed.few = '----'; if(!parsed.sct) parsed.sct = '----'; if(!parsed.bkn) parsed.bkn = '----'; if(!parsed.ovc) parsed.ovc = '----'; 
+            } else if (metar.includes('CAVOK')) { parsed.few = 'CAVOK'; parsed.sct = 'CAVOK'; parsed.bkn = 'CAVOK'; parsed.ovc = 'CAVOK'; lowestCeiling = 999; } 
+            
+            let visMeters = 9999; let wxDetected = []; let metarWords = metar.split(' '); 
+            for (let w of metarWords) { if (wxDictionary[w]) wxDetected.push(wxDictionary[w]); } 
+            
+            if (wxDetected.length > 0) { parsed.wxDesc = `(${wxDetected.join(', ')})`; }
+
+            if (metar.includes('CAVOK')) { 
+                parsed.vis = 'CAVOK'; parsed.visVal = 'CAVOK'; visMeters = 9999;
+            } else { 
+                for (let i = 0; i < metarWords.length; i++) { 
+                    if (/^\d{4}$/.test(metarWords[i]) && !metarWords[i].includes('KT')) { 
+                        visMeters = parseInt(metarWords[i], 10); 
+                        if (visMeters === 9999) { parsed.vis = '10 km'; parsed.visVal = '10 kilometers'; }
+                        else { parsed.vis = (visMeters / 1000) + ' km'; parsed.visVal = (visMeters / 1000) + ' kilometers'; }
+                        break; 
+                    } 
+                } 
+            } 
+            
+            if (visMeters < 5000 || lowestCeiling < 15) { parsed.flightRule = 'IMC'; } else { parsed.flightRule = 'VMC'; }
+
+            let hasRmkCb = false;
+            let cbDesc = "เมฆ CB";
+            const rmkIndex = metar.indexOf('RMK'); 
+            if (rmkIndex !== -1) { 
+                const rmkStr = metar.substring(rmkIndex); 
+                const cbMatch = rmkStr.match(/\bCB\s+([A-Za-z\s]+?)(?=\s+SLP|\s+NOSIG|\s+QFE|\s*\d|$)/); 
+                if (cbMatch) { 
+                    hasRmkCb = true;
+                    cbDesc = "CB " + cbMatch[1].trim(); 
+                } else if (rmkStr.includes(' CB')) {
+                    hasRmkCb = true;
+                }
+            }
+
+            if(metar.includes(' TS') || metar.includes('TS ') || metar.includes('VCTS')) { 
+                let warnStr = 'ฝนฟ้าคะนองบริเวณสนามฝึกฯ';
+                if(hasRmkCb) warnStr += ` (${cbDesc})`;
+                parsed.caution.push(warnStr); 
+            } else if(metar.includes(' RA') || metar.includes('RA ') || metar.includes('-RA') || metar.includes('+RA')) { 
+                parsed.caution.push('มีฝนบริเวณสนามฝึกฯ'); 
+                if(hasRmkCb) parsed.caution.push(cbDesc);
+            } else if(hasRmkCb) {
+                parsed.caution.push(cbDesc);
+            }
+            
+            return parsed; 
+        }
+        
+        function renderDashboard() { 
+            if (!cachedDatabaseText) return; 
+            const selectedStation = document.getElementById('station-select').value; 
+            const regex = new RegExp(selectedStation + '[^"\\\\]+'); const match = cachedDatabaseText.match(regex); 
+            
+            if (!match) { 
+                document.getElementById('raw-metar').innerHTML = `<span style="color:red;">NO DATA AVAILABLE FOR ${selectedStation}</span>`; 
+                document.getElementById('val-time').innerText = '----'; 
+                document.getElementById('val-vis').innerText = '----'; 
+                document.getElementById('val-wx').innerText = ''; 
+                document.getElementById('val-few').innerText = '----'; 
+                document.getElementById('val-sct').innerText = '----'; 
+                document.getElementById('val-bkn').innerText = '----'; 
+                document.getElementById('val-ovc').innerText = '----'; 
+                document.getElementById('val-qnh').innerText = '----'; 
+                document.getElementById('val-temp').innerText = '----';
+                
+                document.getElementById('wind-spd').innerText = '--'; 
+                document.getElementById('wind-dir-text').innerText = '---°'; 
+                document.getElementById('wind-needle-box').style.opacity = '0';
+                document.getElementById('gust-alert').innerText = '';
+                document.getElementById('caution-box').classList.add('hide');
+                
+                const badge = document.getElementById('flight-rule-badge');
+                badge.innerText = 'N/A';
+                badge.className = 'flight-rule-badge na-steady';
+
+                currentParsedData = null; 
+                return; 
+            } 
+            
+            const rawMetar = match[0].trim(); document.getElementById('raw-metar').innerText = rawMetar; 
+            try { 
+                const pData = parseMetar(rawMetar); currentParsedData = pData; 
+                
+                document.getElementById('val-time').innerText = pData.time; 
+                document.getElementById('val-vis').innerText = pData.vis; 
+                document.getElementById('val-wx').innerText = pData.wxDesc; 
+                
+                document.getElementById('val-few').innerHTML = pData.few; 
+                document.getElementById('val-sct').innerHTML = pData.sct; 
+                document.getElementById('val-bkn').innerHTML = pData.bkn; 
+                document.getElementById('val-ovc').innerHTML = pData.ovc; 
+                document.getElementById('val-qnh').innerText = pData.qnh; 
+                document.getElementById('val-temp').innerText = pData.tempDew;
+                
+                const badge = document.getElementById('flight-rule-badge'); badge.innerText = pData.flightRule;
+                if(pData.flightRule === 'IMC') { 
+                    badge.className = 'flight-rule-badge imc-flashing'; 
+                } else { 
+                    badge.className = 'flight-rule-badge vmc-steady'; 
+                }
+
+                document.getElementById('wind-spd').innerText = pData.windSpd; const needleBox = document.getElementById('wind-needle-box'); const gustAlert = document.getElementById('gust-alert');
+                if(pData.gust) {
+                    gustAlert.innerText = `GUST ${pData.gust} KT`; let gustNum = parseInt(pData.gust, 10);
+                    if (gustNum >= 25) { gustAlert.style.color = '#ff3333'; gustAlert.style.textShadow = '0 0 10px #ff3333'; } 
+                    else if (gustNum >= 15) { gustAlert.style.color = '#ff9900'; gustAlert.style.textShadow = '0 0 10px #ff9900'; } 
+                    else { gustAlert.style.color = '#f1c40f'; gustAlert.style.textShadow = '0 0 10px #f1c40f'; }
+                } else { gustAlert.innerText = ''; }
+
+                if (pData.isVrb) { document.getElementById('wind-dir-text').innerText = 'VAR'; needleBox.style.opacity = '0'; } 
+                else if (pData.windSpd === '00' || pData.windSpd === '0') { document.getElementById('wind-dir-text').innerText = 'CALM'; needleBox.style.opacity = '0'; } 
+                else { document.getElementById('wind-dir-text').innerText = pData.windDir + '°'; needleBox.style.opacity = '1'; needleBox.style.transform = `rotate(${pData.windDir}deg)`; } 
+                
+                const cautionBox = document.getElementById('caution-box'); 
+                if (pData.caution.length > 0) { cautionBox.innerHTML = `⚠️ WARNING: ${pData.caution.join(' | ')}`; cautionBox.classList.remove('hide'); } 
+                else { cautionBox.classList.add('hide'); } 
+            } catch (parseError) { console.error(parseError); } 
+        }
+        
+        function fetchWeatherData() { 
+            const overlay = document.getElementById('overlay'); if(!cachedDatabaseText) overlay.classList.remove('hide'); 
+            fetch(apiUrl, { method: 'POST', headers: { 'Accept': '*/*' } }).then(response => { 
+                if (!response.ok) throw new Error('HTTP STATUS: ' + response.status); return response.text(); 
+            }).then(text => { 
+                cachedDatabaseText = text; renderDashboard(); overlay.classList.add('hide'); resetProgressBar();
+            }).catch(error => { 
+                overlay.classList.remove('hide'); overlay.innerHTML = `<span style="color:red; font-weight:bold;">❌ SYSTEM ERROR<br><br>${error.message}<br><br><span style="font-size:1.5vw; color:#fff;">RETRYING IN 10 MINS...</span></span>`; 
+            }); 
+            const radarIframe = document.getElementById('radar-iframe'); radarIframe.src = radarIframe.src; 
+            const fsRadarIframe = document.getElementById('fs-radar-iframe');
+            if(fsRadarIframe.src) fsRadarIframe.src = fsRadarIframe.src;
+        }
+        document.getElementById('station-select').addEventListener('change', renderDashboard);
+        fetchWeatherData(); setInterval(fetchWeatherData, updateIntervalMS); 
+
+        function playATIS() {
+            if (!currentParsedData) return;
+            window.speechSynthesis.cancel(); 
+            const stn = document.getElementById('station-select');
+            const stnName = stn.options[stn.selectedIndex].text.split('(')[1].replace(')','');
+            let speechText = `${stnName} automated weather observation. `;
+            if(currentParsedData.isVrb) speechText += `Wind variable at ${parseInt(currentParsedData.windSpd)} knots. `;
+            else if(currentParsedData.windSpd === '00') speechText += `Wind calm. `;
+            else speechText += `Wind ${currentParsedData.windDir} degrees at ${parseInt(currentParsedData.windSpd)} knots. `;
+            if(currentParsedData.gust) speechText += `Gusts ${parseInt(currentParsedData.gust)} knots. `;
+            speechText += `Visibility ${currentParsedData.visVal}. `;
+            if(currentParsedData.few === 'CAVOK') { speechText += `Sky clear, Ceiling and visibility OK. `; }
+            else {
+                if(currentParsedData.few !== '----') speechText += `Few clouds at ${currentParsedData.few.split('FT')[0].split('>').pop().trim()} feet. `;
+                if(currentParsedData.sct !== '----') speechText += `Scattered clouds at ${currentParsedData.sct.split('FT')[0].split('>').pop().trim()} feet. `;
+                if(currentParsedData.bkn !== '----') speechText += `Broken clouds at ${currentParsedData.bkn.split('FT')[0].split('>').pop().trim()} feet. `;
+                if(currentParsedData.ovc !== '----') speechText += `Overcast at ${currentParsedData.ovc.split('FT')[0].split('>').pop().trim()} feet. `;
+            }
+            if(currentParsedData.tempDew !== '----') { let td = currentParsedData.tempDew.split('/'); speechText += `Temperature ${td[0].replace('°C','').trim()}, Dewpoint ${td[1].replace('°C','').trim()}. `; }
+            if(currentParsedData.qnh !== '----') { speechText += `Altimeter ${currentParsedData.qnh.split('').join(' ')}. `; }
+            const utterance = new SpeechSynthesisUtterance(speechText); utterance.lang = 'en-US'; utterance.rate = 0.9; window.speechSynthesis.speak(utterance);
+        }
+
+        const radarViewport = document.getElementById('radar-viewport');
+        const radarDraggable = document.getElementById('radar-draggable');
+        const radarSelect = document.getElementById('radar-select');
+        const radarIframe = document.getElementById('radar-iframe');
+        
+        const radarOffsets = {
+            "https://weather.tmd.go.th/kkw240_HQ_Loop_edit2.php": { top: -110, left: -170 }, 
+            "https://weather.tmd.go.th/kkw480_HQ_Loop_edit2.php": { top: -150, left: -170 }, 
+            "https://weather.tmd.go.th/chn240_HQ_Loop_edit2.php": { top: -260, left: -420 }, 
+            "https://weather.tmd.go.th/phb240_HQ_Loop_edit2.php": { top: -320, left: -170 },
+            "https://weather.tmd.go.th/tklLoop.php": { top: -200, left: -250 }
+        };
+        
+        let currentOffset = radarOffsets[radarSelect.value] || { top: -110, left: -170 };
+        radarDraggable.style.top = currentOffset.top + 'px'; radarDraggable.style.left = currentOffset.left + 'px';
+
+        let isDragging = false; let startX, startY, initialLeft, initialTop;
+        radarViewport.addEventListener('mousedown', (e) => {
+            isDragging = true; radarViewport.style.cursor = 'grabbing'; startX = e.clientX; startY = e.clientY;
+            initialLeft = parseInt(window.getComputedStyle(radarDraggable).left, 10) || 0; initialTop = parseInt(window.getComputedStyle(radarDraggable).top, 10) || 0;
+        });
+        document.addEventListener('mousemove', (e) => { if (!isDragging) return; radarDraggable.style.left = (initialLeft + (e.clientX - startX)) + 'px'; radarDraggable.style.top = (initialTop + (e.clientY - startY)) + 'px'; });
+        document.addEventListener('mouseup', () => { isDragging = false; radarViewport.style.cursor = 'grab'; });
+        document.addEventListener('mouseleave', () => { isDragging = false; radarViewport.style.cursor = 'grab'; });
+
+        radarSelect.addEventListener('change', (e) => {
+            radarIframe.src = e.target.value; currentOffset = radarOffsets[e.target.value] || { top: -110, left: -170 };
+            radarDraggable.style.top = currentOffset.top + 'px'; radarDraggable.style.left = currentOffset.left + 'px';
+            if(!document.getElementById('radar-modal').classList.contains('hide')) {
+                document.getElementById('fs-radar-iframe').src = e.target.value;
+            }
+        });
+
+        radarViewport.addEventListener('dblclick', () => {
+            const fsModal = document.getElementById('radar-modal');
+            const fsIframe = document.getElementById('fs-radar-iframe');
+            fsIframe.src = radarSelect.value; 
+            fsModal.classList.remove('hide');
+        });
+
+        function closeRadarModal() {
+            document.getElementById('radar-modal').classList.add('hide');
+            document.getElementById('fs-radar-iframe').src = ""; 
+        }
+
+    </script>
+
+</body>
+</html>
